@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   DndContext,
@@ -27,8 +27,9 @@ import {
   DocumentCheckIcon
 } from '@heroicons/react/24/outline'
 import { cn, generateId } from '@/utils'
-import { availableDocuments, documentTypeConfig } from '@/data/documents'
-import type { SelectedDocument, DocumentType } from '@/types'
+import { documentTypeConfig } from '@/data/documents'
+import { documentService } from '@/services/documentService'
+import type { SelectedDocument, DocumentType, Document } from '@/types'
 
 interface DocumentOrderingProps {
   formData: Partial<import('@/types').ProjectFormData>
@@ -155,6 +156,25 @@ export default function DocumentOrdering({
 }: DocumentOrderingProps) {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterType, setFilterType] = useState<DocumentType | 'all'>('all')
+  const [availableDocuments, setAvailableDocuments] = useState<Document[]>([])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    const loadDocuments = async () => {
+      try {
+        setLoading(true)
+        if (formData.productType) {
+          const docs = await documentService.getDocumentsByProductType(formData.productType)
+          setAvailableDocuments(docs)
+        }
+      } catch (error) {
+        console.error('Error loading documents:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadDocuments()
+  }, [formData.productType])
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -198,7 +218,7 @@ export default function DocumentOrdering({
       const priorityB = configB?.priority ?? 99
       return priorityA - priorityB
     })
-  }, [])
+  }, [availableDocuments])
 
   // Filter only selected documents and sort by order
   const sortedDocuments = selectedDocuments
@@ -360,8 +380,16 @@ export default function DocumentOrdering({
             </p>
           </motion.div>
 
+          {/* Loading State */}
+          {loading && (
+            <div className="text-center py-8">
+              <p className="text-gray-500 dark:text-gray-400">Loading documents...</p>
+            </div>
+          )}
+
           {/* Documents Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
+          {!loading && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
             <AnimatePresence>
               {filteredDocuments.map((document, index) => {
                 const isSelected = isDocumentSelected(document.id)
@@ -414,13 +442,14 @@ export default function DocumentOrdering({
                 )
               })}
             </AnimatePresence>
-          </div>
+            </div>
+          )}
 
           {/* No Results */}
           {filteredDocuments.length === 0 && (
             <div className="text-center py-8">
               <p className="text-gray-500 dark:text-gray-400">
-                {formData.productType 
+                {formData.productType
                   ? `No documents available for ${formData.productType === 'structural-floor' ? 'Structural Floor Panel' : 'Underlayment'}.`
                   : 'No documents found.'}
               </p>

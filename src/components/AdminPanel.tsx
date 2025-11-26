@@ -2,16 +2,19 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Upload, Trash2, Edit2, Save, X, FileText, Lock, Unlock, Eye, EyeOff, FolderOpen } from 'lucide-react'
 import { documentService } from '@/services/documentService'
+import { authService } from '@/services/authService'
 import type { Document, DocumentType, ProductType } from '@/types'
 
 interface AdminPanelProps {
   onClose?: () => void
 }
 
+const ADMIN_EMAIL = 'admin@example.com'
 const ADMIN_PASSWORD = 'admin123'
 
 export default function AdminPanel({ onClose }: AdminPanelProps) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(() => authService.isAuthenticated())
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [documents, setDocuments] = useState<Document[]>([])
@@ -29,6 +32,10 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
     }
   }, [isAuthenticated])
 
+  useEffect(() => {
+    authService.initializeAdminUser(ADMIN_EMAIL, ADMIN_PASSWORD).catch(console.error)
+  }, [])
+
   const loadDocuments = async () => {
     try {
       setLoading(true)
@@ -42,14 +49,29 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
     }
   }
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (password === ADMIN_PASSWORD) {
-      setIsAuthenticated(true)
-      setError(null)
-    } else {
-      setError('Invalid password')
+    try {
+      const isValid = await authService.authenticateAdmin(ADMIN_EMAIL, password)
+      if (isValid) {
+        authService.setAdminSession(ADMIN_EMAIL)
+        setIsAuthenticated(true)
+        setError(null)
+        setPassword('')
+      } else {
+        setError('Invalid password')
+      }
+    } catch (err) {
+      setError('Authentication failed')
+      console.error(err)
     }
+  }
+
+  const handleLogout = () => {
+    authService.clearAdminSession()
+    setIsAuthenticated(false)
+    setPassword('')
+    setEmail('')
   }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -259,7 +281,7 @@ export default function AdminPanel({ onClose }: AdminPanelProps) {
           </div>
           <div className="flex gap-3">
             <button
-              onClick={() => setIsAuthenticated(false)}
+              onClick={handleLogout}
               className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
             >
               <Lock className="inline-block w-5 h-5 mr-2" />
